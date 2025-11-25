@@ -12,8 +12,10 @@ export interface Product {
   created_at: string;
   updated_at: string;
   category_id: string | null;
+  // NOVO: Adicione esta linha para resolver o erro de tipagem
+  subcategory_id: string | null; 
   referencia: string | null;
-  marca: string | null;        // NOVO
-  tamanho: string | null;      // NOVO
+  marca: string | null;        
+  tamanho: string | null;      
   categories?: Category;
 }
