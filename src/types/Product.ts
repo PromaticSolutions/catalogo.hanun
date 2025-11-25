@@ -1,5 +1,4 @@
-// Dentro do arquivo: src/types/Product.ts - VERSÃO CORRIGIDA E COMPLETA
-
+// src/types/Product.ts
 import { Category } from './Category';
 
 export interface Product {
@@ -9,10 +8,12 @@ export interface Product {
   price: number;
   image_url: string;
   stock_quantity: number;
-  is_active: boolean; // Propriedade que estava faltando
-  created_at: string; // Propriedade que estava faltando
-  updated_at: string; // Propriedade que estava faltando
-  category_id: string | null; // Deve permitir nulo
-  referencia: string | null; // A NOVA PROPRIEDADE
-  categories?: Category; // Opcional, para o join com a tabela de categorias
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  category_id: string | null;
+  referencia: string | null;
+  marca: string | null;        // NOVO
+  tamanho: string | null;      // NOVO
+  categories?: Category;
 }

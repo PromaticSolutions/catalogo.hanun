@@ -1,11 +1,7 @@
-// src/components/admin/ProductModal.tsx - VERSÃO FINAL CORRIGIDA
-
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Product } from '../../types/Product';
 import { Category } from '../../types/Category';
-// --- CORREÇÃO 1: Importar 'AttributeOption' também ---
-import { Attribute, AttributeOption } from '../../lib/supabase';
 import { toast } from 'react-toastify';
 import { Package } from 'lucide-react';
 
@@ -24,49 +20,15 @@ export default function ProductModal({ product, categories, onClose }: ProductMo
     imageUrl: '',
     stockQuantity: '0',
     referencia: '',
+    marca: '',
+    tamanho: '',
   });
 
-  const [attributes, setAttributes] = useState<Attribute[]>([]);
-  const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchAttributes = async () => {
-    const { data, error } = await supabase
-      .from('attributes')
-      .select(`id, name, attribute_options ( id, value )`);
-    
-    if (error) {
-      toast.error("Erro ao buscar filtros: " + error.message);
-    } else {
-      setAttributes(data as Attribute[]);
-    }
-  };
-
-  const fetchProductAttributes = async (productId: string) => {
-    const { data, error } = await supabase
-      .from('product_attributes')
-      .select('*, attribute_options(*, attributes(*))')
-      .eq('product_id', productId);
-
-    if (error) {
-      toast.error("Erro ao buscar os filtros do produto.");
-    } else {
-      const initialSelections: Record<string, string> = {};
-      for (const pa of data) {
-        if (pa.attribute_options && pa.attribute_options.attributes) {
-          const attributeId = pa.attribute_options.attributes.id;
-          const optionId = pa.option_id;
-          initialSelections[attributeId] = optionId;
-        }
-      }
-      setSelectedAttributes(initialSelections);
-    }
-  };
-
   useEffect(() => {
-    fetchAttributes();
     if (product) {
       setFormData({
         name: product.name || '',
@@ -76,27 +38,30 @@ export default function ProductModal({ product, categories, onClose }: ProductMo
         imageUrl: product.image_url || '',
         stockQuantity: String(product.stock_quantity || '0'),
         referencia: product.referencia || '',
+        marca: product.marca || '',
+        tamanho: product.tamanho || '',
       });
       setPreviewUrl(product.image_url || null);
-      fetchProductAttributes(product.id);
     } else {
-      setFormData({ name: '', description: '', price: '', categoryId: '', imageUrl: '', stockQuantity: '0', referencia: '' });
+      setFormData({
+        name: '',
+        description: '',
+        price: '',
+        categoryId: '',
+        imageUrl: '',
+        stockQuantity: '0',
+        referencia: '',
+        marca: '',
+        tamanho: '',
+      });
       setSelectedFile(null);
       setPreviewUrl(null);
-      setSelectedAttributes({});
     }
   }, [product]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleAttributeChange = (attributeId: string, optionId: string) => {
-    setSelectedAttributes(prev => ({
-      ...prev,
-      [attributeId]: optionId,
-    }));
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -137,42 +102,28 @@ export default function ProductModal({ product, categories, onClose }: ProductMo
       image_url: finalImageUrl,
       stock_quantity: parseInt(formData.stockQuantity, 10) || 0,
       referencia: formData.referencia || null,
+      marca: formData.marca || null,
+      tamanho: formData.tamanho || null,
     };
 
     try {
-      let productId = product?.id;
       let error;
 
       if (product) {
-        // --- CORREÇÃO 2: Remover a declaração de 'data' que não é usada ---
         const { error: updateError } = await supabase.from('products').update(productData).eq('id', product.id);
         error = updateError;
       } else {
-        // --- CORREÇÃO 3: Renomear 'data' para pegar o ID do novo produto ---
-        const { data: insertedData, error: insertError } = await supabase.from('products').insert(productData).select().single();
+        const { error: insertError } = await supabase.from('products').insert(productData);
         error = insertError;
-        if (insertedData) productId = insertedData.id;
       }
 
       if (error) throw error;
-      if (!productId) throw new Error("ID do produto não encontrado após salvar.");
-
-      await supabase.from('product_attributes').delete().eq('product_id', productId);
-
-      const attributesToInsert = Object.values(selectedAttributes)
-        .filter(optionId => optionId)
-        .map(optionId => ({ product_id: productId, option_id: optionId }));
-
-      if (attributesToInsert.length > 0) {
-        const { error: attrError } = await supabase.from('product_attributes').insert(attributesToInsert);
-        if (attrError) throw attrError;
-      }
 
       toast.success(`Produto ${product ? 'atualizado' : 'criado'} com sucesso!`);
       onClose();
 
     } catch (err: any) {
-      console.error("Erro ao salvar produto ou atributos:", err);
+      console.error("Erro ao salvar produto:", err);
       toast.error('Erro ao salvar: ' + err.message);
     } finally {
       setIsSubmitting(false);
@@ -195,13 +146,21 @@ export default function ProductModal({ product, categories, onClose }: ProductMo
                 <input name="referencia" type="text" value={formData.referencia} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg" placeholder="Ex: PITEIRA-001" />
               </div>
               <div>
+                <label className="block text-gray-700 mb-1">Marca</label>
+                <input name="marca" type="text" value={formData.marca} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg" placeholder="Ex: OCB, Smoking, RAW" />
+              </div>
+              <div>
+                <label className="block text-gray-700 mb-1">Tamanho</label>
+                <input name="tamanho" type="text" value={formData.tamanho} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg" placeholder="Ex: King Size, 1 1/4, Mini" />
+              </div>
+              <div>
                 <label className="block text-gray-700 mb-1">Preço</label>
                 <input name="price" type="number" step="0.01" value={formData.price} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg" required />
               </div>
               <div>
                 <label className="block text-gray-700 mb-1">Categoria</label>
                 <select name="categoryId" value={formData.categoryId} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg" required>
-                  <option value="" disabled>Selecione uma categoria</option>
+                  <option value="">Selecione uma categoria</option>
                   {categories.map((cat) => (<option key={cat.id} value={cat.id}>{cat.name}</option>))}
                 </select>
               </div>
@@ -223,7 +182,7 @@ export default function ProductModal({ product, categories, onClose }: ProductMo
                 <label className="block text-gray-700 mb-1">Colar URL da Imagem</label>
                 <input name="imageUrl" type="text" value={formData.imageUrl} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg" placeholder="https://exemplo.com/imagem.png" />
               </div>
-              {(previewUrl || formData.imageUrl ) && (
+              {(previewUrl || formData.imageUrl) && (
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Pré-visualização:</p>
                   <img src={previewUrl || formData.imageUrl} alt="Pré-visualização" className="w-full h-40 object-contain rounded-lg border bg-gray-50" />
@@ -231,30 +190,6 @@ export default function ProductModal({ product, categories, onClose }: ProductMo
               )}
             </div>
           </div>
-          
-          {attributes.length > 0 && (
-            <div className="mt-6 pt-6 border-t">
-              <h3 className="text-lg font-semibold mb-4">Filtros / Atributos</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {attributes.map(attr => (
-                  <div key={attr.id}>
-                    <label className="block text-gray-700 mb-1">{attr.name}</label>
-                    <select
-                      value={selectedAttributes[attr.id] || ''}
-                      onChange={(e) => handleAttributeChange(attr.id, e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg"
-                    >
-                      <option value="">Nenhum</option>
-                      {/* --- CORREÇÃO 4: Adicionar o tipo explícito a 'opt' --- */}
-                      {attr.attribute_options.map((opt: AttributeOption) => (
-                        <option key={opt.id} value={opt.id}>{opt.value}</option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           <div className="mt-6 pt-6 border-t">
             <label className="block text-gray-700 mb-1">Descrição</label>
