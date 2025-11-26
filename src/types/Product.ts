@@ -12,7 +12,7 @@ export interface Product {
   created_at: string;
   updated_at: string;
   category_id: string | null;
-  subcategory_id: string | null;  // NOVO
+  // subcategory_id: string | null;  // ❌ REMOVER
   referencia: string | null;
   marca: string | null;
   tamanho: string | null;

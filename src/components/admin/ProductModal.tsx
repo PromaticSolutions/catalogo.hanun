@@ -2,9 +2,6 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Product } from '../../types/Product';
 import { Category } from '../../types/Category';
-
-
-
 import { toast } from 'react-toastify';
 import { Package } from 'lucide-react';
 
@@ -14,13 +11,16 @@ interface ProductModalProps {
   onClose: () => void;
 }
 
+interface CategoryTreeItem extends Category {
+  children?: CategoryTreeItem[];
+}
+
 export default function ProductModal({ product, categories, onClose }: ProductModalProps) {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     price: '',
     categoryId: '',
-    subcategoryId: '', // NOVO: Campo para a subcategoria
     imageUrl: '',
     stockQuantity: '0',
     referencia: '',
@@ -31,9 +31,31 @@ export default function ProductModal({ product, categories, onClose }: ProductMo
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [subcategories, setSubcategories] = useState<Category[]>([]); // NOVO: Estado para armazenar as subcategorias
+  const [categoryTree, setCategoryTree] = useState<CategoryTreeItem[]>([]);
 
-  // Efeito para carregar dados do produto (se estiver editando)
+  // Constrói árvore de categorias para exibição hierárquica
+  const buildCategoryTree = (items: Category[]): CategoryTreeItem[] => {
+    const map = new Map<string, CategoryTreeItem>();
+    items.forEach((c) => map.set(c.id, { ...c, children: [] }));
+
+    const roots: CategoryTreeItem[] = [];
+    items.forEach((c) => {
+      if (c.parent_id && map.has(c.parent_id)) {
+        const parent = map.get(c.parent_id)!;
+        parent.children = parent.children || [];
+        parent.children.push(map.get(c.id)!);
+      } else {
+        roots.push(map.get(c.id)!);
+      }
+    });
+
+    return roots;
+  };
+
+  useEffect(() => {
+    setCategoryTree(buildCategoryTree(categories));
+  }, [categories]);
+
   useEffect(() => {
     if (product) {
       setFormData({
@@ -41,7 +63,6 @@ export default function ProductModal({ product, categories, onClose }: ProductMo
         description: product.description || '',
         price: String(product.price || ''),
         categoryId: product.category_id || '',
-        subcategoryId: product.subcategory_id || '', // NOVO: Carrega subcategory_id
         imageUrl: product.image_url || '',
         stockQuantity: String(product.stock_quantity || '0'),
         referencia: product.referencia || '',
@@ -55,7 +76,6 @@ export default function ProductModal({ product, categories, onClose }: ProductMo
         description: '',
         price: '',
         categoryId: '',
-        subcategoryId: '', // NOVO: Limpa subcategory_id
         imageUrl: '',
         stockQuantity: '0',
         referencia: '',
@@ -67,41 +87,9 @@ export default function ProductModal({ product, categories, onClose }: ProductMo
     }
   }, [product]);
 
-  // NOVO: Efeito para buscar subcategorias quando a categoria muda
-  useEffect(() => {
-    const fetchSubcategories = async () => {
-      if (formData.categoryId) {
-        // Busca no Supabase todas as subcategorias que pertencem à categoryId selecionada (usando a mesma tabela 'categories' com parent_id)
-        const { data, error } = await supabase
-          .from('categories')
-          .select('*')
-          .eq('parent_id', formData.categoryId)
-          .order('name', { ascending: true });
-
-        if (error) {
-          console.error('Erro ao buscar subcategorias:', error);
-          setSubcategories([]);
-          return;
-        }
-
-        setSubcategories(data as Category[]);
-      } else {
-        setSubcategories([]);
-      }
-    };
-
-    fetchSubcategories();
-  }, [formData.categoryId]); // Depende da categoria selecionada
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    
-    // Lógica para resetar a subcategoria se a categoria for alterada
-    if (name === 'categoryId') {
-      setFormData(prev => ({ ...prev, [name]: value, subcategoryId: '' }));
-    } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
-    }
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -139,7 +127,6 @@ export default function ProductModal({ product, categories, onClose }: ProductMo
       description: formData.description,
       price: parseFloat(formData.price),
       category_id: formData.categoryId,
-      subcategory_id: formData.subcategoryId || null, // NOVO: Salva a subcategoria (ou null se não houver)
       image_url: finalImageUrl,
       stock_quantity: parseInt(formData.stockQuantity, 10) || 0,
       referencia: formData.referencia || null,
@@ -171,6 +158,26 @@ export default function ProductModal({ product, categories, onClose }: ProductMo
     }
   };
 
+  // Renderiza opções de select com indentação para subcategorias
+  const renderCategoryOptions = (items: CategoryTreeItem[], level: number = 0): JSX.Element[] => {
+    const options: JSX.Element[] = [];
+    
+    items.forEach(cat => {
+      const indent = '  '.repeat(level);
+      options.push(
+        <option key={cat.id} value={cat.id}>
+          {indent}{level > 0 ? '└─ ' : ''}{cat.name}
+        </option>
+      );
+      
+      if (cat.children && cat.children.length > 0) {
+        options.push(...renderCategoryOptions(cat.children, level + 1));
+      }
+    });
+    
+    return options;
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white p-8 rounded-lg shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -198,34 +205,14 @@ export default function ProductModal({ product, categories, onClose }: ProductMo
                 <label className="block text-gray-700 mb-1">Preço</label>
                 <input name="price" type="number" step="0.01" value={formData.price} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg" required />
               </div>
-              
-              {/* CAMPO CATEGORIA EXISTENTE */}
               <div>
-                <label className="block text-gray-700 mb-1">Categoria</label>
+                <label className="block text-gray-700 mb-1">Categoria / Subcategoria</label>
                 <select name="categoryId" value={formData.categoryId} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg" required>
                   <option value="">Selecione uma categoria</option>
-                  {categories.map((cat) => (<option key={cat.id} value={cat.id}>{cat.name}</option>))}
+                  {renderCategoryOptions(categoryTree)}
                 </select>
+                <p className="text-xs text-gray-500 mt-1">💡 Escolha a categoria mais específica possível</p>
               </div>
-
-              {/* NOVO CAMPO SUBCATEGORIA - Aparece apenas se houver subcategorias */}
-              {subcategories.length > 0 && (
-                <div>
-                  <label className="block text-gray-700 mb-1">Subcategoria</label>
-                  <select 
-                    name="subcategoryId" 
-                    value={formData.subcategoryId} 
-                    onChange={handleChange} 
-                    className="w-full px-3 py-2 border rounded-lg"
-                  >
-                    <option value="">Selecione uma subcategoria (Opcional)</option>
-                    {subcategories.map((subcat) => (
-                      <option key={subcat.id} value={subcat.id}>{subcat.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
               <div>
                 <label className="block text-gray-700 mb-1">Quantidade em Estoque</label>
                 <input name="stockQuantity" type="number" min="0" value={formData.stockQuantity} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg" required />

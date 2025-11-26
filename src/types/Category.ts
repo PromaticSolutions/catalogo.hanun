@@ -1,5 +1,7 @@
+// src/types/Category.ts
 export interface Category {
-  id: string; // <-- MUDADO PARA STRING (UUID)
+  id: string;
   name: string;
-  created_at: string;
+  parent_id: string | null;  // ADICIONE ESTA LINHA
+  created_at?: string;
 }
